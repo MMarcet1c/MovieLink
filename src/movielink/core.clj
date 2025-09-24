@@ -6,6 +6,31 @@
 
 (def db-spec db/db-spec)
 
+(defn create-user []
+  (println "=== Create New User ===")
+  (print "Enter username: ") (flush)
+  (let [username (read-line)]
+    ;; Check if username exists
+    (if (seq (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+      (do (println "Username already exists!") (create-user))
+      (do
+        ;; Password input
+        (print "Enter password: ") (flush)
+        (let [password (read-line)]
+          (print "Confirm password: ") (flush)
+          (let [confirm (read-line)]
+            (if (= password confirm)
+              (do
+                ;; Insert user
+                (jdbc/execute! db-spec
+                               ["INSERT INTO users (username, password_hash) VALUES (?, ?)"
+                                username (hashers/derive password)])
+                (println "User created successfully! You are now logged in.")
+                username) ;; return username
+              (do
+                (println "Passwords do not match. Try again.")
+                (recur)))))))))
+
 (defn login []
   (println "=== Login ===")
   (loop [attempts 0]
@@ -152,6 +177,19 @@
         (println "Rating: " (:movies/rating m) "  |")
         (println "------------------------------------------------------------------------------------------")))))
 
+(defn start-menu []
+  (println "=== Welcome to Movie CLI ===")
+  (println "1. Login")
+  (println "2. Create New User")
+  (println "3. Exit")
+  (print "Choose option: ") (flush)
+  (let [choice (read-line)]
+    (case choice
+      "1" (login)
+      "2" (create-user)
+      "3" (do (println "Goodbye!") (System/exit 0))
+      (do (println "Invalid option") (recur)))))
+
 (defn menu [username]
   (println "\n=== Movie CLI Menu ===")
   (println "1. Search by rating")
@@ -176,5 +214,5 @@
 
 (defn -main []
   (db/setup-db)
-  (let [user (login)]
+  (let [user (start-menu)]
     (menu user)))
