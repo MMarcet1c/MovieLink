@@ -120,6 +120,23 @@
         (println (str "Movie '" (:movies/title movie) "' added to favorites!")))
       (println "Movie not found."))))
 
+(defn remove-from-favorites [username]
+  (print "Enter movie title to remove from favorites: ") (flush)
+  (let [title (read-line)
+        user  (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        movie (first (jdbc/execute! db-spec
+                                    ["SELECT * FROM movies WHERE LOWER(title) LIKE ?" (str "%" (str/lower-case title) "%")]))]
+    (if (and user movie)
+      (let [result (jdbc/execute! db-spec
+                                  ["DELETE FROM favorites WHERE user_id=? AND movie_id=?"
+                                   (:users/id user) (:movies/id movie)])
+            deleted-count (:next.jdbc/update-count (first result))]
+        (if (pos? deleted-count)
+          (println (str "Movie '" (:movies/title movie) "' removed from favorites!"))
+          (println "That movie was not in your favorites.")))
+      (println "Movie not found."))))
+
+
 (defn show-favorites [username]
   (let [user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
         movies (jdbc/execute! db-spec
@@ -142,7 +159,8 @@
   (println "3. Search by name")
   (println "4. Show Favorites")
   (println "5. Add movie to Favorites")
-  (println "6. Exit")
+  (println "6. Remove movie from Favorites")
+  (println "7. Exit")
   (print "Choose option: ") (flush)
   (let [choice (read-line)]
     (case choice
@@ -151,7 +169,8 @@
       "3" (do (search-by-name) (menu username))
       "4" (do (show-favorites username) (menu username))
       "5" (do (add-to-favorites username) (menu username))
-      "6" (println "Goodbye!")
+      "6" (do (remove-from-favorites username) (menu username))
+      "7" (println "Goodbye!")
       (do (println "Invalid choice") (menu username)))))
 
 
