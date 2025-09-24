@@ -177,6 +177,34 @@
         (println "Rating: " (:movies/rating m) "  |")
         (println "------------------------------------------------------------------------------------------")))))
 
+(defn favorites-stats [username]
+  (let [user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        movies (jdbc/execute! db-spec
+                              ["SELECT m.* FROM movies m
+                                JOIN favorites f ON m.id = f.movie_id
+                                WHERE f.user_id = ?" (:users/id user)])]
+    (if (empty? movies)
+      (println "You have no favorites yet.")
+      (let [total (count movies)
+            all-genres (->> movies
+                            (map :movies/genres)
+                            (map #(str/split % #","))
+                            (apply concat)
+                            (map str/trim))
+            genre-counts (frequencies all-genres)
+            most-genre (first (apply max-key val genre-counts))
+            avg-rating (/ (reduce + (map :movies/rating movies)) total)]
+
+        (println "=== Favorites Statistics ===")
+        (println "Total favorite movies:" total)
+        (println "Most frequent genre:" most-genre)
+        (println "Percentage per genre:")
+        (doseq [[genre count] genre-counts]
+          (let [pct (* 100 (/ count total))]
+            (println (format "- %s: %.2f%%" genre (double pct)))))
+        (println (format "Average rating: %.2f" avg-rating))))))
+
+
 (defn start-menu []
   (println "=== Welcome to Movie CLI ===")
   (println "1. Login")
@@ -198,7 +226,8 @@
   (println "4. Show Favorites")
   (println "5. Add movie to Favorites")
   (println "6. Remove movie from Favorites")
-  (println "7. Exit")
+  (println "7. Favorites Statistics")
+  (println "8. Exit")
   (print "Choose option: ") (flush)
   (let [choice (read-line)]
     (case choice
@@ -208,11 +237,12 @@
       "4" (do (show-favorites username) (menu username))
       "5" (do (add-to-favorites username) (menu username))
       "6" (do (remove-from-favorites username) (menu username))
-      "7" (println "Goodbye!")
+      "7" (do (favorites-stats username) (menu username))
+      "8" (println "Goodbye!")
       (do (println "Invalid choice") (menu username)))))
 
 
 (defn -main []
   (db/setup-db)
   (let [user (start-menu)]
-    (menu user)))
+    (menu user)))5
