@@ -2,7 +2,8 @@
   (:require [movielink.db :as db]
             [next.jdbc :as jdbc]
             [buddy.hashers :as hashers]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [movielink.genre :refer [genre-diff]]))
 
 (def db-spec db/db-spec)
 
@@ -301,6 +302,42 @@
             (println (str @added? " friends added.")))
           )))))
 
+(defn get-all-movies []
+  (jdbc/execute! db-spec ["SELECT id, title, genres, rating, description FROM movies"]))
+
+(defn parse-genres [genres-str]
+  (map str/trim (str/split genres-str #",")))
+
+(defn similarity-score [desired-rating desired-genre rating-weight genre-weight movie]
+  (let [r-diff (Math/abs (- desired-rating (:movies/rating movie)))
+        movie-genres (map str/lower-case (parse-genres (:movies/genres movie)))
+        g-diff (apply min (map #(genre-diff desired-genre %) movie-genres))]
+    (+ (* rating-weight r-diff)
+       (* genre-weight g-diff))))
+
+(defn best-match [desired-rating desired-genre rating-weight genre-weight]
+  (let [movies (get-all-movies)]
+    (apply min-key
+           #(similarity-score desired-rating desired-genre rating-weight genre-weight %)
+           movies)))
+
+(defn recommend-movie []
+  (print "Enter desired rating (e.g. 8.0): ") (flush)
+  (let [desired-rating (Double/parseDouble (read-line))]
+    (print "Enter desired genre: ") (flush)
+    (let [desired-genre (str/lower-case (read-line))]
+      (print "Enter rating weight (0-1): ") (flush)
+      (let [rating-weight (Double/parseDouble (read-line))]
+        (print "Enter genre weight (0-1): ") (flush)
+        (let [genre-weight (Double/parseDouble (read-line))
+              movie (best-match desired-rating desired-genre rating-weight genre-weight)]
+          (println "\n=== Recommended Movie ===")
+          (println "Title:" (:movies/title movie))
+          (println "Genres:" (:movies/genres movie))
+          (println "Rating:" (:movies/rating movie))
+          (println "Description:" (:movies/description movie)))))))
+
+
 (defn start-menu []
   (println "=== Welcome to Movie CLI ===")
   (println "1. Login")
@@ -320,6 +357,7 @@
     (println "1. Search by rating")
     (println "2. Search by genre(s)")
     (println "3. Search by name")
+    (println "4. Recommend a movie for me")
     (println "0. Back")
     (print "Choose option: ") (flush)
     (let [choice (read-line)]
@@ -327,13 +365,14 @@
         "1" (do (search-by-rating) (recur))
         "2" (do (search-by-genre) (recur))
         "3" (do (search-by-name) (recur))
+        "4" (do (recommend-movie) (recur))
         "0" :back
         (do (println "Invalid option.") (recur))))))
 
 (defn favorites-menu [username]
   (loop []
-    (println "\n--- Favorites ---")
-    (println "1. Show Favorites")
+    (println "\n--- Favorites movies ---")
+    (println "1. Show Favorites movies")
     (println "2. Add movie to Favorites")
     (println "3. Remove movie from Favorites")
     (println "4. Favorites Statistics")
@@ -354,7 +393,7 @@
     (println "1. List Friends")
     (println "2. Add Friend")
     (println "3. Remove Friend")
-    (println "4. Find Friends (same favorite genre)")
+    (println "4. Find Friends (similar genre lovers)")
     (println "0. Back")
     (print "Choose option: ") (flush)
     (let [choice (read-line)]
@@ -369,8 +408,8 @@
 (defn main-menu [username]
   (loop []
     (println "\n=== Movie CLI Menu ===")
-    (println "1. Search Movies")
-    (println "2. Favorites")
+    (println "1. Search movies")
+    (println "2. Favorites movies")
     (println "3. Friends")
     (println "0. Exit")
     (print "Choose option: ") (flush)
