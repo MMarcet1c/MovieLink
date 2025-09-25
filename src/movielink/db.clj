@@ -31,6 +31,13 @@
                                UNIQUE(user_id, movie_id),
                                FOREIGN KEY(user_id) REFERENCES users(id),
                                FOREIGN KEY(movie_id) REFERENCES movies(id))"])
+    (jdbc/execute! db-spec ["CREATE TABLE IF NOT EXISTS friends (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             user_id INTEGER,
+                             friend_id INTEGER,
+                             UNIQUE(user_id, friend_id),
+                             FOREIGN KEY(user_id) REFERENCES users(id),
+                             FOREIGN KEY(friend_id) REFERENCES users(id))"])
 
     ;; Seed data
     (jdbc/execute! db-spec

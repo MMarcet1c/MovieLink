@@ -204,6 +204,102 @@
             (println (format "- %s: %.2f%%" genre (double pct)))))
         (println (format "Average rating: %.2f" avg-rating))))))
 
+(defn add-friend [username]
+  (print "Enter the username of the friend to add: ") (flush)
+  (let [friend-name (read-line)
+        user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        friend (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" friend-name]))]
+    (cond
+      (nil? friend) (println "User not found.")
+      (= (:users/id user) (:users/id friend)) (println "You cannot add yourself as a friend.")
+      :else
+      (do
+        ;; Insert friendship in both directions
+        (jdbc/execute! db-spec
+                       ["INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)"
+                        (:users/id user) (:users/id friend)])
+        (jdbc/execute! db-spec
+                       ["INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)"
+                        (:users/id friend) (:users/id user)])
+        (println (str "You are now friends with " friend-name "!"))))))
+
+(defn remove-friend [username]
+  (print "Enter the username of the friend to remove: ") (flush)
+  (let [friend-name (read-line)
+        user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        friend (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" friend-name]))]
+    (if (and friend user)
+      (do
+        (jdbc/execute! db-spec
+                       ["DELETE FROM friends WHERE user_id=? AND friend_id=?"
+                        (:users/id user) (:users/id friend)])
+        (jdbc/execute! db-spec
+                       ["DELETE FROM friends WHERE user_id=? AND friend_id=?"
+                        (:users/id friend) (:users/id user)])
+        (println (str "You are no longer friends with " friend-name)))
+      (println "User not found."))))
+
+(defn list-friends [username]
+  (let [user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        friends (jdbc/execute! db-spec
+                               ["SELECT u.username FROM users u
+                                 JOIN friends f ON u.id = f.friend_id
+                                 WHERE f.user_id=?" (:users/id user)])]
+    (if (empty? friends)
+      (println "You have no friends yet.")
+      (do
+        (println "=== Your Friends ===")
+        (doseq [f friends]
+          (println "- " (:users/username f)))))))
+
+(defn find-friends [username]
+  (let [user (first (jdbc/execute! db-spec ["SELECT * FROM users WHERE username=?" username]))
+        movies (jdbc/execute! db-spec
+                              ["SELECT m.* FROM movies m
+                                JOIN favorites f ON m.id = f.movie_id
+                                WHERE f.user_id=?" (:users/id user)])]
+    (if (empty? movies)
+      (println "You have no favorites, cannot find friends.")
+      (let [all-genres      (->> movies
+                                 (map :movies/genres)
+                                 (map #(str/split % #","))
+                                 (apply concat)
+                                 (map str/trim))
+            genre-counts    (frequencies all-genres)
+            most-genre      (first (apply max-key val genre-counts))
+            candidate-users (jdbc/execute! db-spec
+                                           ["SELECT DISTINCT u.id, u.username
+                                             FROM users u
+                                             JOIN favorites f ON u.id = f.user_id
+                                             JOIN movies m ON m.id = f.movie_id
+                                             WHERE LOWER(m.genres) LIKE ?
+                                               AND u.username != ?
+                                               AND u.id NOT IN (
+                                                 SELECT friend_id FROM friends WHERE user_id = ?
+                                               )"
+                                            (str "%" (str/lower-case most-genre) "%")
+                                            username
+                                            (:users/id user)])
+            added? (atom 0)]
+        (if (empty? candidate-users)
+          (println "No new users can be found with the same most frequent genre.")
+          (do
+            (println "Users with same favorite genre (" most-genre "):")
+            (doseq [u candidate-users]
+              (println "- " (:users/username u))
+              (print "Add as friend? (y/n): ") (flush)
+              (let [resp (str/lower-case (read-line))]
+                (when (= resp "y")
+                  (jdbc/execute! db-spec
+                                 ["INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)"
+                                  (:users/id user) (:users/id u)])
+                  (jdbc/execute! db-spec
+                                 ["INSERT OR IGNORE INTO friends (user_id, friend_id) VALUES (?, ?)"
+                                  (:users/id u) (:users/id user)])
+                  (swap! added? inc)
+                  (println "Added as friend!"))))
+            (println (str @added? " friends added.")))
+          )))))
 
 (defn start-menu []
   (println "=== Welcome to Movie CLI ===")
@@ -227,7 +323,11 @@
   (println "5. Add movie to Favorites")
   (println "6. Remove movie from Favorites")
   (println "7. Favorites Statistics")
-  (println "8. Exit")
+  (println "8. Add Friend")
+  (println "9. Remove Friend")
+  (println "10. List Friend")
+  (println "11. Find Friends")
+  (println "12. Exit")
   (print "Choose option: ") (flush)
   (let [choice (read-line)]
     (case choice
@@ -238,11 +338,15 @@
       "5" (do (add-to-favorites username) (menu username))
       "6" (do (remove-from-favorites username) (menu username))
       "7" (do (favorites-stats username) (menu username))
-      "8" (println "Goodbye!")
+      "8"  (do (add-friend username) (menu username))
+      "9" (do (remove-friend username) (menu username))
+      "10" (do (list-friends username) (menu username))
+      "11" (do (find-friends username) (menu username))
+      "12" (println "Goodbye!")
       (do (println "Invalid choice") (menu username)))))
 
 
 (defn -main []
   (db/setup-db)
   (let [user (start-menu)]
-    (menu user)))5
+    (menu user)))
