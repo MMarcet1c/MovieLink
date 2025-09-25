@@ -79,4 +79,3 @@
       (jdbc/execute! db-spec
                      ["INSERT OR IGNORE INTO movies (title, genres, rating, description) VALUES (?, ?, ?, ?)"
                       (nth movie 0) (nth movie 1) (nth movie 2) (nth movie 3)]))))
-
