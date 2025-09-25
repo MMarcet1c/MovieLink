@@ -314,39 +314,75 @@
       "3" (do (println "Goodbye!") (System/exit 0))
       (do (println "Invalid option") (recur)))))
 
-(defn menu [username]
-  (println "\n=== Movie CLI Menu ===")
-  (println "1. Search by rating")
-  (println "2. Search by genre")
-  (println "3. Search by name")
-  (println "4. Show Favorites")
-  (println "5. Add movie to Favorites")
-  (println "6. Remove movie from Favorites")
-  (println "7. Favorites Statistics")
-  (println "8. Add Friend")
-  (println "9. Remove Friend")
-  (println "10. List Friend")
-  (println "11. Find Friends")
-  (println "12. Exit")
-  (print "Choose option: ") (flush)
-  (let [choice (read-line)]
-    (case choice
-      "1" (do (search-by-rating) (menu username))
-      "2" (do (search-by-genre) (menu username))
-      "3" (do (search-by-name) (menu username))
-      "4" (do (show-favorites username) (menu username))
-      "5" (do (add-to-favorites username) (menu username))
-      "6" (do (remove-from-favorites username) (menu username))
-      "7" (do (favorites-stats username) (menu username))
-      "8"  (do (add-friend username) (menu username))
-      "9" (do (remove-friend username) (menu username))
-      "10" (do (list-friends username) (menu username))
-      "11" (do (find-friends username) (menu username))
-      "12" (println "Goodbye!")
-      (do (println "Invalid choice") (menu username)))))
+(defn search-menu [username]
+  (loop []
+    (println "\n--- Search Movies ---")
+    (println "1. Search by rating")
+    (println "2. Search by genre(s)")
+    (println "3. Search by name")
+    (println "0. Back")
+    (print "Choose option: ") (flush)
+    (let [choice (read-line)]
+      (case choice
+        "1" (do (search-by-rating) (recur))
+        "2" (do (search-by-genre) (recur))
+        "3" (do (search-by-name) (recur))
+        "0" :back
+        (do (println "Invalid option.") (recur))))))
 
+(defn favorites-menu [username]
+  (loop []
+    (println "\n--- Favorites ---")
+    (println "1. Show Favorites")
+    (println "2. Add movie to Favorites")
+    (println "3. Remove movie from Favorites")
+    (println "4. Favorites Statistics")
+    (println "0. Back")
+    (print "Choose option: ") (flush)
+    (let [choice (read-line)]
+      (case choice
+        "1" (do (show-favorites username) (recur))
+        "2" (do (add-to-favorites username) (recur))
+        "3" (do (remove-from-favorites username) (recur))
+        "4" (do (favorites-stats username) (recur))
+        "0" :back
+        (do (println "Invalid option.") (recur))))))
+
+(defn friends-menu [username]
+  (loop []
+    (println "\n--- Friends ---")
+    (println "1. List Friends")
+    (println "2. Add Friend")
+    (println "3. Remove Friend")
+    (println "4. Find Friends (same favorite genre)")
+    (println "0. Back")
+    (print "Choose option: ") (flush)
+    (let [choice (read-line)]
+      (case choice
+        "1" (do (list-friends username) (recur))
+        "2" (do (add-friend username) (recur))
+        "3" (do (remove-friend username) (recur))
+        "4" (do (find-friends username) (recur))
+        "0" :back
+        (do (println "Invalid option.") (recur))))))
+
+(defn main-menu [username]
+  (loop []
+    (println "\n=== Movie CLI Menu ===")
+    (println "1. Search Movies")
+    (println "2. Favorites")
+    (println "3. Friends")
+    (println "0. Exit")
+    (print "Choose option: ") (flush)
+    (let [choice (read-line)]
+      (case choice
+        "1" (do (search-menu username) (recur))
+        "2" (do (favorites-menu username) (recur))
+        "3" (do (friends-menu username) (recur))
+        "0" (println "Goodbye!")
+        (do (println "Invalid choice") (recur))))))
 
 (defn -main []
   (db/setup-db)
   (let [user (start-menu)]
-    (menu user)))
+    (main-menu user)))
